@@ -14,7 +14,7 @@ const Navbar = () => {
           </div>
 
         {/* Desktop Menu */}
-        <div className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-400 font-gentium">
+        <div className="hidden md:flex items-center gap-8 text-xl font-medium text-slate-400 font-gentium">
           <a href="#" className="hover:text-ingredi-green transition-colors">How it works</a>
           <a href="#" className="hover:text-ingredi-green transition-colors">Saved Recipes</a>
           <button className="bg-ingredi-green text-ingredi-bg px-5 py-2 rounded-full font-bold hover:bg-white transition-all">
