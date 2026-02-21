@@ -1,0 +1,17 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ingredi-bg: #0F172A;
+  --color-ingredi-green: #4ADE80;
+  --color-ingredi-emerald: #059669;
+  --color-ingredi-slate: #94A3B8;
+  --color-ingredi-surface: #1E293B;
+  --font-gentium: "Gentium Book Plus", serif;
+  --font-inter: "Inter", sans-serif;
+}
+
+body {
+  background-color: var(--color-ingredi-bg);
+  color: white;
+  font-family: var(--font-inter);
+}
