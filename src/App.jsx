@@ -100,7 +100,7 @@ function App() {
           </form>
 
           {/* Exterior Glow */}
-          <div className="absolute -inset-1 bg-gradient-to-r from-ingredi-green to-ingredi-emerald rounded-2xl blur opacity-0 group-focus-within:opacity-20 transition duration-500 -z-10"></div>
+          <div className="absolute -inset-1 bg-gradient-to-r from-ingredi-green to-ingredi-emerald  rounded-2xl blur opacity-0 group-focus-within:opacity-20 transition duration-500 -z-10"></div>
         </div>
 
         {/* Ingredient Chips Display */}
@@ -121,6 +121,21 @@ function App() {
     </div>
   ))}
 </div>
+{/* Find Recipes Button - Only shows when ingredients exist */}
+{ingredients.length > 0 && (
+  <div className="mt-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <button 
+      onClick={() => alert("Searching for: " + ingredients.join(", "))} // Abhi alert dikhayega, baad mein API connect karenge
+      className="font-inter group relative px-12 py-5 bg-ingredi-green text-ingredi-bg font-black text-xl rounded-2xl hover:bg-white transition-all duration-300 shadow-[0_0_40px_rgba(74,222,128,0.2)] hover:shadow-ingredi-green/40 active:scale-95 flex items-center gap-3"
+    >
+      <Search size={24} className="group-hover:rotate-12 transition-transform " />
+      Find Best Recipe
+      
+      {/* Button ki outer glow */}
+      <div className="absolute inset-0 rounded-2xl blur-xl bg-ingredi-green/30 -z-10 group-hover:bg-ingredi-green/50 transition-all"></div>
+    </button>
+  </div>
+)}
 
         {/* --- Recipe Grid --- */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 w-full max-w-6xl mt-12">
