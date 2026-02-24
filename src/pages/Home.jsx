@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
-import { Search, X, Plus, Clock, Users, PlayCircle, ChefHat, BarChart } from 'lucide-react';
+import { Search, X, Plus, Clock, Users, PlayCircle, ChefHat, BarChart, Trash2, Zap, ArrowRight, Heart } from 'lucide-react';
+import { db } from '../firebase/config';
+import { collection, addDoc, query, where, getDocs, deleteDoc, doc } from 'firebase/firestore';
+import { useAuth } from '../context/AuthContext'; // Agar import nahi hai to kar lein
 
 
 
@@ -97,6 +100,46 @@ const fetchRecipes = async () => {
     setLoading(false);
   }
 };
+const { user } = useAuth();
+
+const toggleSaveRecipe = async (recipe) => {
+  if (!user) {
+    alert("Please login to save recipes!");
+    navigate('/auth');
+    return;
+  }
+
+  try {
+    // Check karein ke kya ye pehle se save toh nahi?
+    const q = query(
+      collection(db, "savedRecipes"), 
+      where("userId", "==", user.uid),
+      where("title", "==", recipe.title)
+    );
+    const querySnapshot = await getDocs(q);
+
+    if (!querySnapshot.empty) {
+      // Agar pehle se saved hai to delete kar do (Unsave logic)
+      const docId = querySnapshot.docs[0].id;
+      await deleteDoc(doc(db, "savedRecipes", docId));
+      alert("Recipe removed from favorites!");
+    } else {
+      // Nayi recipe save karein
+      await addDoc(collection(db, "savedRecipes"), {
+        userId: user.uid,
+        title: recipe.title,
+        image: recipe.image,
+        time: recipe.time,
+        servings: recipe.servings,
+        ingredients: recipe.ingredients,
+        timestamp: new Date()
+      });
+      alert("Recipe saved successfully! ❤️");
+    }
+  } catch (error) {
+    console.error("Error saving recipe:", error);
+  }
+};
   return (
   <div className="min-h-screen bg-ingredi-bg text-white font-inter">
     
@@ -166,7 +209,7 @@ const fetchRecipes = async () => {
             className="group relative px-12 py-5 bg-ingredi-green text-ingredi-bg font-black text-xl rounded-2xl hover:bg-white transition-all duration-300 shadow-[0_0_40px_rgba(74,222,128,0.2)] hover:shadow-ingredi-green/40 active:scale-95 flex items-center gap-3 disabled:opacity-50"
           >
             <Search size={24} className={loading ? "animate-spin" : "group-hover:rotate-12 transition-transform"} />
-            {loading ? "SEARCHING..." : "FIND BEST RECIPES"}
+            {loading ? "Searching..." : "Find Best Recipes"}
             <div className="absolute inset-0 rounded-2xl blur-xl bg-ingredi-green/30 -z-10 group-hover:bg-ingredi-green/50 transition-all"></div>
           </button>
         </div>
@@ -184,6 +227,18 @@ const fetchRecipes = async () => {
               >
                 <div className="relative h-60 overflow-hidden">
                   <img src={recipe.image} alt={recipe.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                <button 
+    onClick={(e) => {
+      e.stopPropagation(); // Taake card ka click (Modal) trigger na ho
+      toggleSaveRecipe(recipe);
+    }}
+    className="absolute top-4 right-4 z-10 p-3 bg-ingredi-bg/60 backdrop-blur-md rounded-full border border-white/10 hover:bg-ingredi-green group/heart transition-all"
+  >
+    <Heart 
+      size={20} 
+      className="text-white group-hover/heart:text-ingredi-bg group-hover/heart:fill-current transition-colors" 
+    />
+  </button>
                 </div>
 
                 <div className="p-8">
