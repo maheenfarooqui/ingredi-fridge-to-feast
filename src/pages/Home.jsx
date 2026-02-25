@@ -1,145 +1,157 @@
-import React, { useState } from 'react';
-import { Search, X, Plus, Clock, Users, PlayCircle, ChefHat, BarChart, Trash2, Zap, ArrowRight, Heart } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom'; // Add this
+import { 
+  Search, X, Plus, Clock, Users, PlayCircle, ChefHat, 
+  BarChart, Trash2, Zap, ArrowRight, Heart 
+} from 'lucide-react';
+
+// Firebase Imports
 import { db } from '../firebase/config';
-import { collection, addDoc, query, where, getDocs, deleteDoc, doc } from 'firebase/firestore';
-import { useAuth } from '../context/AuthContext'; // Agar import nahi hai to kar lein
-
-
+import { 
+  collection, addDoc, query, where, getDocs, 
+  deleteDoc, doc, onSnapshot 
+} from 'firebase/firestore'; 
+import { useAuth } from '../context/AuthContext';
 
 function Home() {
+  // --- HOOKS & AUTH ---
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  // --- STATE MANAGEMENT ---
   const [inputValue, setInputValue] = useState("");
   const [ingredients, setIngredients] = useState([]);
-  const [selectedRecipe, setSelectedRecipe] = useState(null);
-  const [recipes, setRecipes] = useState([]); 
+  const [recipes, setRecipes] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [selectedRecipe, setSelectedRecipe] = useState(null);
+  const [savedIds, setSavedIds] = useState([]); // List of saved titles
 
-  // --- API CONFIG ---
-  const APP_ID = "c0565c16"; 
-const APP_KEY = "7b098fcfe5774321fce04a8f39230d42";
+  // --- REAL-TIME SYNC (Saved Recipes) ---
+  useEffect(() => {
+    if (!user) {
+      setSavedIds([]);
+      return;
+    }
 
-  // --- FUNCTIONS ---
+    // Senior Approach: Use a listener for real-time heart updates
+    const q = query(
+      collection(db, "savedRecipes"), 
+      where("userId", "==", user.uid)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const titles = snapshot.docs.map(doc => doc.data().title);
+      setSavedRecipeTitles(titles);
+    }, (error) => {
+      console.error("Firestore Listen Error:", error);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+  // Check if a recipe is saved (Optimized)
+  const isRecipeSaved = (title) => savedRecipeTitles.includes(title);
+
+  // --- API SETTINGS ---
+  const APP_ID = "c0565c16";
+  const APP_KEY = "7b098fcfe5774321fce04a8f39230d42";
+
+  // --- CORE FUNCTIONS ---
   const handleAddIngredient = (e) => {
     e.preventDefault();
     const val = inputValue.trim().toLowerCase();
     if (val && !ingredients.includes(val)) {
-      setIngredients([...ingredients, val]);
+      setIngredients(prev => [...prev, val]);
       setInputValue("");
     }
   };
 
   const removeIngredient = (nameToRemove) => {
-    setIngredients(ingredients.filter(item => item !== nameToRemove));
+    setIngredients(prev => prev.filter(item => item !== nameToRemove));
   };
 
-const fetchRecipes = async () => {
-  if (ingredients.length === 0) return;
-  
-  setLoading(true);
-  
-  // Ingredients ko join karke query string banana
-  const query = ingredients.join(" "); 
-  
-  // Nayi Recipe Search API IDs
-  const APP_ID = "c0565c16"; 
-  const APP_KEY = "7b098fcfe5774321fce04a8f39230d42"; 
+  const fetchRecipes = async () => {
+    if (ingredients.length === 0) return;
+    setLoading(true);
 
-  // Direct v2 API Endpoint
-  const url = `https://api.edamam.com/api/recipes/v2?type=public&q=${encodeURIComponent(query)}&app_id=${APP_ID}&app_key=${APP_KEY}`;
+    const searchQuery = ingredients.join(" ");
+    const url = `https://api.edamam.com/api/recipes/v2?type=public&q=${encodeURIComponent(searchQuery)}&app_id=${APP_ID}&app_key=${APP_KEY}`;
 
-  try {
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-        'Accept-Language': 'en'
+    try {
+      const response = await fetch(url);
+      
+      if (response.status === 429) throw new Error("Rate limit exceeded. Wait 1 min.");
+      if (!response.ok) throw new Error("Failed to fetch recipes.");
+
+      const data = await response.json();
+      
+      if (!data.hits?.length) {
+        alert("No recipes found for these ingredients!");
+        return;
       }
-    });
 
-    // Rate Limit Check (1 hit/min)
-    if (response.status === 429) {
-      alert("Slow down! 1 minute mein sirf ek baar search kar sakte hain.");
+      const formatted = data.hits.map((item, index) => ({
+        id: item.recipe.uri || index, // Better unique ID
+        title: item.recipe.label,
+        description: `Source: ${item.recipe.source}`,
+        image: item.recipe.image,
+        time: item.recipe.totalTime > 0 ? `${item.recipe.totalTime} min` : "20 min",
+        servings: `${item.recipe.yield || 2} Persons`,
+        difficulty: item.recipe.ingredients.length > 7 ? "Medium" : "Easy",
+        ingredients: item.recipe.ingredientLines,
+        youtube: `https://www.youtube.com/results?search_query=${encodeURIComponent(item.recipe.label)}+recipe`,
+        instructions: "Follow the video guide for step-by-step preparation."
+      }));
+
+      setRecipes(formatted);
+      window.scrollTo({ top: 750, behavior: 'smooth' });
+
+    } catch (error) {
+      console.error("Search Error:", error);
+      alert(error.message);
+    } finally {
       setLoading(false);
+    }
+  };
+
+  const toggleSaveRecipe = async (recipe) => {
+    if (!user) {
+      alert("Please login to save recipes!");
+      navigate('/auth');
       return;
     }
 
-    if (!response.ok) {
-      throw new Error(`Server status: ${response.status}`);
+    try {
+      // Check if already exists
+      const q = query(
+        collection(db, "savedRecipes"),
+        where("userId", "==", user.uid),
+        where("title", "==", recipe.title)
+      );
+      
+      const snapshot = await getDocs(q);
+
+      if (!snapshot.empty) {
+        // Unsave
+        const docRef = doc(db, "savedRecipes", snapshot.docs[0].id);
+        await deleteDoc(docRef);
+        // Toast notification behtar hai alert se, lekin abhi alert hi rakhte hain
+      } else {
+        // Save
+        await addDoc(collection(db, "savedRecipes"), {
+          userId: user.uid,
+          title: recipe.title,
+          image: recipe.image,
+          time: recipe.time,
+          servings: recipe.servings,
+          ingredients: recipe.ingredients,
+          createdAt: new Date()
+        });
+      }
+    } catch (err) {
+      console.error("Save Error:", err);
     }
-
-    const data = await response.json();
-    
-    if (!data.hits || data.hits.length === 0) {
-      alert("Koi recipe nahi mili! Try simpler ingredients like 'Egg' or 'Bread'.");
-      return;
-    }
-
-    const formattedRecipes = data.hits.map((item, index) => ({
-      id: index,
-      title: item.recipe.label,
-      description: `Source: ${item.recipe.source}`, 
-      image: item.recipe.image,
-      time: item.recipe.totalTime > 0 ? `${item.recipe.totalTime} min` : "20 min",
-      servings: `${item.recipe.yield || 2} Persons`,
-      difficulty: item.recipe.ingredients.length > 7 ? "Medium" : "Easy",
-      ingredients: item.recipe.ingredientLines,
-      youtube: `https://www.youtube.com/results?search_query=${encodeURIComponent(item.recipe.label)}+recipe`,
-      instructions: "Follow the video guide or click the source link for details."
-    }));
-
-    setRecipes(formattedRecipes);
-    
-    // Smooth scroll to results
-    setTimeout(() => {
-      window.scrollTo({ top: 800, behavior: 'smooth' });
-    }, 100);
-    
-  } catch (error) {
-    console.error("Fetch Error:", error);
-    alert("Connection Error! Thora wait karke refresh karein.");
-  } finally {
-    setLoading(false);
-  }
-};
-const { user } = useAuth();
-
-const toggleSaveRecipe = async (recipe) => {
-  if (!user) {
-    alert("Please login to save recipes!");
-    navigate('/auth');
-    return;
-  }
-
-  try {
-    // Check karein ke kya ye pehle se save toh nahi?
-    const q = query(
-      collection(db, "savedRecipes"), 
-      where("userId", "==", user.uid),
-      where("title", "==", recipe.title)
-    );
-    const querySnapshot = await getDocs(q);
-
-    if (!querySnapshot.empty) {
-      // Agar pehle se saved hai to delete kar do (Unsave logic)
-      const docId = querySnapshot.docs[0].id;
-      await deleteDoc(doc(db, "savedRecipes", docId));
-      alert("Recipe removed from favorites!");
-    } else {
-      // Nayi recipe save karein
-      await addDoc(collection(db, "savedRecipes"), {
-        userId: user.uid,
-        title: recipe.title,
-        image: recipe.image,
-        time: recipe.time,
-        servings: recipe.servings,
-        ingredients: recipe.ingredients,
-        timestamp: new Date()
-      });
-      alert("Recipe saved successfully! ❤️");
-    }
-  } catch (error) {
-    console.error("Error saving recipe:", error);
-  }
-};
+  };
   return (
   <div className="min-h-screen bg-ingredi-bg text-white font-inter">
     
@@ -227,18 +239,23 @@ const toggleSaveRecipe = async (recipe) => {
               >
                 <div className="relative h-60 overflow-hidden">
                   <img src={recipe.image} alt={recipe.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
-                <button 
-    onClick={(e) => {
-      e.stopPropagation(); // Taake card ka click (Modal) trigger na ho
-      toggleSaveRecipe(recipe);
-    }}
-    className="absolute top-4 right-4 z-10 p-3 bg-ingredi-bg/60 backdrop-blur-md rounded-full border border-white/10 hover:bg-ingredi-green group/heart transition-all"
-  >
-    <Heart 
-      size={20} 
-      className="text-white group-hover/heart:text-ingredi-bg group-hover/heart:fill-current transition-colors" 
-    />
-  </button>
+<button 
+  onClick={(e) => {
+    e.stopPropagation();
+    toggleSaveRecipe(recipe);
+  }}
+  className="absolute top-4 right-4 z-10 p-3 bg-ingredi-bg/60 backdrop-blur-md rounded-full border border-white/10 transition-all"
+>
+  <Heart 
+    size={20} 
+    // AGAR SAVED HAI TO BRAND COLOR (GREEN) AUR FILL KARDO, WARNA WHITE
+    className={`transition-colors ${
+      savedIds.includes(recipe.title) 
+        ? "text-ingredi-green fill-ingredi-green" 
+        : "text-white"
+    }`}
+  />
+</button>
                 </div>
 
                 <div className="p-8">

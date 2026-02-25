@@ -31,7 +31,7 @@ const Navbar = () => {
         {/* Desktop Menu */}
         <div className="hidden md:flex items-center gap-8 text-xl font-medium text-slate-400 font-gentium">
           <Link to="/how-it-works" className="hover:text-ingredi-green transition-colors">How it works</Link>
-        <Link to="/saved">  <a href="#" className="hover:text-ingredi-green transition-colors">Saved Recipes</a></Link>
+        <Link to="/saved" className="hover:text-ingredi-green transition-colors">Saved Recipes</Link>
          {/* Conditional Rendering: Login vs User Profile */}
           {user ? (
             <div className="flex items-center gap-4">
