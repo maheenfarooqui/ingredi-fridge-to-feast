@@ -14,34 +14,34 @@ import {
 import { useAuth } from '../context/AuthContext';
 
 function Home() {
-  // --- HOOKS & AUTH ---
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  // --- STATE MANAGEMENT ---
   const [inputValue, setInputValue] = useState("");
   const [ingredients, setIngredients] = useState([]);
   const [recipes, setRecipes] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedRecipe, setSelectedRecipe] = useState(null);
-  const [savedIds, setSavedIds] = useState([]); // List of saved titles
+  
+  // 1. GHALTI FIX: State ka naam 'savedIds' rakha tha
+  const [savedIds, setSavedIds] = useState([]); 
 
-  // --- REAL-TIME SYNC (Saved Recipes) ---
+  // --- REAL-TIME SYNC ---
   useEffect(() => {
     if (!user) {
       setSavedIds([]);
       return;
     }
 
-    // Senior Approach: Use a listener for real-time heart updates
     const q = query(
       collection(db, "savedRecipes"), 
       where("userId", "==", user.uid)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
+      // 2. GHALTI FIX: Yahan 'setSavedIds' use karna tha
       const titles = snapshot.docs.map(doc => doc.data().title);
-      setSavedRecipeTitles(titles);
+      setSavedIds(titles); 
     }, (error) => {
       console.error("Firestore Listen Error:", error);
     });
@@ -49,8 +49,8 @@ function Home() {
     return () => unsubscribe();
   }, [user]);
 
-  // Check if a recipe is saved (Optimized)
-  const isRecipeSaved = (title) => savedRecipeTitles.includes(title);
+  // 3. GHALTI FIX: Function ko 'savedIds' use karna chahiye
+  const isRecipeSaved = (title) => savedIds.includes(title);
 
   // --- API SETTINGS ---
   const APP_ID = "c0565c16";
@@ -74,24 +74,22 @@ function Home() {
     if (ingredients.length === 0) return;
     setLoading(true);
 
-    const searchQuery = ingredients.join(" ");
+    const searchQuery = ingredients.join(" "); // Search query variable name fixed
     const url = `https://api.edamam.com/api/recipes/v2?type=public&q=${encodeURIComponent(searchQuery)}&app_id=${APP_ID}&app_key=${APP_KEY}`;
 
     try {
       const response = await fetch(url);
-      
-      if (response.status === 429) throw new Error("Rate limit exceeded. Wait 1 min.");
+      if (response.status === 429) throw new Error("Slow down! API limit reached.");
       if (!response.ok) throw new Error("Failed to fetch recipes.");
 
       const data = await response.json();
-      
       if (!data.hits?.length) {
-        alert("No recipes found for these ingredients!");
+        alert("No recipes found!");
         return;
       }
 
       const formatted = data.hits.map((item, index) => ({
-        id: item.recipe.uri || index, // Better unique ID
+        id: item.recipe.uri || index,
         title: item.recipe.label,
         description: `Source: ${item.recipe.source}`,
         image: item.recipe.image,
@@ -100,14 +98,11 @@ function Home() {
         difficulty: item.recipe.ingredients.length > 7 ? "Medium" : "Easy",
         ingredients: item.recipe.ingredientLines,
         youtube: `https://www.youtube.com/results?search_query=${encodeURIComponent(item.recipe.label)}+recipe`,
-        instructions: "Follow the video guide for step-by-step preparation."
       }));
 
       setRecipes(formatted);
       window.scrollTo({ top: 750, behavior: 'smooth' });
-
     } catch (error) {
-      console.error("Search Error:", error);
       alert(error.message);
     } finally {
       setLoading(false);
@@ -122,7 +117,6 @@ function Home() {
     }
 
     try {
-      // Check if already exists
       const q = query(
         collection(db, "savedRecipes"),
         where("userId", "==", user.uid),
@@ -135,7 +129,6 @@ function Home() {
         // Unsave
         const docRef = doc(db, "savedRecipes", snapshot.docs[0].id);
         await deleteDoc(docRef);
-        // Toast notification behtar hai alert se, lekin abhi alert hi rakhte hain
       } else {
         // Save
         await addDoc(collection(db, "savedRecipes"), {
@@ -244,7 +237,7 @@ function Home() {
     e.stopPropagation();
     toggleSaveRecipe(recipe);
   }}
-  className="absolute top-4 right-4 z-10 p-3 bg-ingredi-bg/60 backdrop-blur-md rounded-full border border-white/10 transition-all"
+  className="absolute top-4 right-4 z-10 p-3 bg-ingredi-bg/60 backdrop-blur-md rounded-full border border-white/10 transition-all cursor-pointer"
 >
   <Heart 
     size={20} 
